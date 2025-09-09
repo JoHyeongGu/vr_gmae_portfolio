@@ -12,10 +12,13 @@ class VRGAMEPORTFOLIO_API AKnife : public AActor
 public:	
 	AKnife();
 
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> KnifeMesh;
+
 protected:
 	virtual void BeginPlay() override;
-
-public:	
 	virtual void Tick(float DeltaTime) override;
 
+private:	
+	void InitComponents();
 };
