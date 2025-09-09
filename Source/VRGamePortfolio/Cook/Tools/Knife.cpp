@@ -1,4 +1,6 @@
+#include "Kismet/GameplayStatics.h"
 #include "VRGamePortfolio/Cook/Tools/Knife.h"
+#include "VRGamePortfolio/Components/GrabSpawner.h"
 
 AKnife::AKnife()
 {
@@ -28,6 +30,13 @@ void AKnife::InitComponents()
 	// Set Component
 	KnifeMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("KnifeMesh"));
 	KnifeMesh->SetStaticMesh(KnifeMeshRef.Object);
+	KnifeMesh->SetCollisionProfileName("BlockAll");
+	KnifeMesh->SetSimulatePhysics(true);
+	KnifeMesh->SetNotifyRigidBodyCollision(true);
 	RootComponent = KnifeMesh;
+
+	// Add Grab Component
+	AGrabSpawner* GrabSpawner = (AGrabSpawner*)UGameplayStatics::GetActorOfClass(GetWorld(), AGrabSpawner::StaticClass());
+	if (GrabSpawner) GrabSpawner->AttachGrabComponent(this);
 }
 
