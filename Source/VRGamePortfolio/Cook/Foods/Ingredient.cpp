@@ -1,7 +1,8 @@
 #include "VRGamePortfolio/Cook/Foods/Ingredient.h"
-
-#include "ProceduralMeshComponent.h"
+#include "VRGamePortfolio/Components/GrabSpawner.h"
+#include "Kismet/GameplayStatics.h"
 #include "KismetProceduralMeshLibrary.h"
+#include "ProceduralMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSourceData.h"
 
@@ -10,18 +11,35 @@ AIngredient::AIngredient()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
+void AIngredient::BeginPlay()
+{
+	Super::BeginPlay();
+
+	// Add Grab Component
+	GrabSpawner = (AGrabSpawner*)UGameplayStatics::GetActorOfClass(GetWorld(), AGrabSpawner::StaticClass());
+	if (GrabSpawner) GrabSpawner->AttachGrabComponent(this);
+}
+
 void AIngredient::InitComponents()
 {
-    if (MeshPath.IsEmpty()) return;
-	static ConstructorHelpers::FObjectFinder<UStaticMesh> MeshRef(*MeshPath);
-
 	ProceMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ShapeMesh"));
 	ProceMesh->SetCollisionProfileName("BlockAll");
-	ProceMesh->bUseComplexAsSimpleCollision = false;
 	ProceMesh->SetSimulatePhysics(true);
 	ProceMesh->SetNotifyRigidBodyCollision(true);
-	CopyProceduralMeshFromStaticMesh(ProceMesh, MeshRef.Object);
+	ProceMesh->bUseComplexAsSimpleCollision = false;
 	RootComponent = ProceMesh;
+
+	// Static Mesh 기반 Procedural Mesh 모양 생성
+	if (!MeshPath.IsEmpty()) {
+		static ConstructorHelpers::FObjectFinder<UStaticMesh> MeshRef(*MeshPath);
+		CopyProceduralMeshFromStaticMesh(ProceMesh, MeshRef.Object);
+	}
+	// Slice 단면 Material 설정
+	if (!SlicedMaterialPath.IsEmpty()) {
+		static ConstructorHelpers::FObjectFinder<UMaterial> MaterialRef(*SlicedMaterialPath);
+		SlicedMaterial = MaterialRef.Object;
+	}
+
 }
 
 void AIngredient::CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* ProceduralMesh, UStaticMesh* SourceMesh)
@@ -29,10 +47,7 @@ void AIngredient::CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* Pro
     const TArray<FStaticMaterial> MaterialArray = SourceMesh->GetStaticMaterials();
     const FStaticMeshRenderData* RenderData = SourceMesh->GetRenderData();
 
-    TArray<FVector2D> UVs;
-    TArray<FVector> Normals;
-    TArray<FProcMeshTangent> Tangents;
-
+	TArray<FVector> CollisionVertices;
     for (int32 LODIndex = 0; LODIndex < RenderData->LODResources.Num(); LODIndex++)
     {
         const FStaticMeshSectionArray Sections = RenderData->LODResources[LODIndex].Sections;
@@ -40,7 +55,10 @@ void AIngredient::CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* Pro
         {
             // Section 정보 할당
             TArray<int32> Triangles;
+			TArray<FVector2D> UVs;
+			TArray<FVector> Normals;
             TArray<FVector> Vertices;
+			TArray<FProcMeshTangent> Tangents;
             UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(SourceMesh, LODIndex, SectionIndex, Vertices, Triangles, Normals, UVs, Tangents);
 
             // 새로운 Section 생성
@@ -49,15 +67,14 @@ void AIngredient::CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* Pro
             // Material 복사
             const FStaticMeshSection& Section = Sections[SectionIndex];
             ProceduralMesh->SetMaterial(SectionIndex, MaterialArray[Section.MaterialIndex].MaterialInterface);
+
+			CollisionVertices.Append(Vertices);
         }
     }
-    TArray<FVector> CollisionVertices;
-    TArray<int32> CollisionTriangles;
-    UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(SourceMesh, 0, 0, CollisionVertices, CollisionTriangles, Normals, UVs, Tangents);
+	// Set Collision
     ProceduralMesh->ClearCollisionConvexMeshes();
     ProceduralMesh->AddCollisionConvexMesh(CollisionVertices);
 }
-
 
 void AIngredient::Slice(FVector Position, FVector Normal)
 {
@@ -71,19 +88,6 @@ void AIngredient::Slice(FVector Position, FVector Normal)
 		EProcMeshSliceCapOption::CreateNewSectionForCap,
 		SlicedMaterial
 	);
-
-	// FTransform MeshTransform = SlicedMesh->GetComponentTransform();
-	// MeshTransform.SetScale3D(FVector(0.99f, 0.99f, 0.99f));
-
-	//FActorSpawnParameters SpawnParams;
-	//SpawnParams.Owner = this;
-	//SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-	//AJewel* NewJewel = GetWorld()->SpawnActor<AJewel>(AJewel::StaticClass(), MeshTransform, SpawnParams);
-	//NewJewel->CopyProceduralMeshFromAnother(SlicedMesh);
-
-	//GrabSpawner->AttachGrabComponent(NewJewel);
-
-	//SlicedMesh->DestroyComponent();
-
-	//JewelMesh->SetMaterial(JewelMesh->GetNumMaterials(), SlicedMaterial);
+	SlicedMesh->DestroyComponent();
 }
+

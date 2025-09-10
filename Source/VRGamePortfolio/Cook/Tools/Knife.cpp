@@ -1,18 +1,23 @@
-#include "Kismet/GameplayStatics.h"
 #include "VRGamePortfolio/Cook/Tools/Knife.h"
 #include "VRGamePortfolio/Components/GrabSpawner.h"
+#include "VRGamePortfolio/Cook/Foods/Ingredient.h"
+#include "Components/BoxComponent.h"
+#include "Kismet/GameplayStatics.h"
 
 AKnife::AKnife()
 {
 	PrimaryActorTick.bCanEverTick = true;
 	InitComponents();
-
+	BindCollisionFunction();
 }
 
 void AKnife::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	// Add Grab Component
+	AActor* GrabSpawner = UGameplayStatics::GetActorOfClass(GetWorld(), AGrabSpawner::StaticClass());
+	if (GrabSpawner) ((AGrabSpawner*)GrabSpawner)->AttachGrabComponent(this);
 }
 
 void AKnife::Tick(float DeltaTime)
@@ -35,8 +40,38 @@ void AKnife::InitComponents()
 	KnifeMesh->SetNotifyRigidBodyCollision(true);
 	RootComponent = KnifeMesh;
 
-	// Add Grab Component
-	AGrabSpawner* GrabSpawner = (AGrabSpawner*)UGameplayStatics::GetActorOfClass(GetWorld(), AGrabSpawner::StaticClass());
-	if (GrabSpawner) GrabSpawner->AttachGrabComponent(this);
+	// Create Collision
+	SliceCollision = CreateDefaultSubobject<UBoxComponent>(TEXT("SliceCollision"));
+	SliceCollision->SetupAttachment(KnifeMesh);
+	SliceCollision->InitBoxExtent(FVector(18.2f, 0.1f, 1.7f));
+	SliceCollision->SetRelativeLocation(FVector(12.8f, 0.f, -6.f));
+	SliceCollision->SetCollisionProfileName("OverlapAll");
+	SliceCollision->ComponentTags.Add("KnifeSlice");
 }
 
+void AKnife::BindCollisionFunction()
+{
+	FScriptDelegate OverlapDelegate;
+	OverlapDelegate.BindUFunction(this, FName("SliceCollisionStart"));
+	SliceCollision->OnComponentBeginOverlap.Add(OverlapDelegate);
+
+	OverlapDelegate.BindUFunction(this, FName("SliceCollisionEnd"));
+	SliceCollision->OnComponentEndOverlap.Add(OverlapDelegate);
+}
+
+void AKnife::SliceCollisionStart(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+
+	try // Ingredient Ãæµ¹ ½Ã, Slice
+	{
+		const FVector Position = SliceCollision->GetComponentLocation();
+		const FVector Normal = SliceCollision->GetRightVector();
+		AIngredient* Ingredient = (AIngredient*)OtherActor;
+		Ingredient->Slice(Position, Normal);
+	} catch (const std::exception&) { }
+}
+
+void AKnife::SliceCollisionEnd(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+	UE_LOG(LogTemp, Display, TEXT("Collision End"));
+}

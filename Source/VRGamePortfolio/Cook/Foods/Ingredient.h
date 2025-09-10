@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "Ingredient.generated.h"
 
+class AGrabSpawner;
 class UProceduralMeshComponent;
 
 UCLASS()
@@ -11,12 +12,8 @@ class VRGAMEPORTFOLIO_API AIngredient : public AActor
 {
 	GENERATED_BODY()
 	
-public:	
+public:
 	AIngredient();
-
-protected:
-	UPROPERTY(VisibleAnywhere)
-	FString MeshPath;
 
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UProceduralMeshComponent> ProceMesh;
@@ -24,7 +21,21 @@ protected:
 	UPROPERTY(VisibleAnywhere)
 	UMaterial* SlicedMaterial;
 
-	virtual void InitComponents();
-	void CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* ProceduralMesh, UStaticMesh* StaticMesh);
 	void Slice(FVector Position, FVector Normal);
+	virtual void InitComponents();
+
+protected:
+	virtual void BeginPlay() override;
+
+	UPROPERTY(VisibleAnywhere)
+	FString MeshPath;
+
+	UPROPERTY(VisibleAnywhere)
+	FString SlicedMaterialPath;
+
+	void CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* ProceduralMesh, UStaticMesh* StaticMesh);
+
+private:
+	UPROPERTY(VisibleAnywhere)
+	AGrabSpawner* GrabSpawner;
 };

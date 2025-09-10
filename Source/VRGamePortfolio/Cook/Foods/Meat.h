@@ -11,4 +11,7 @@ class VRGAMEPORTFOLIO_API AMeat : public AIngredient
 
 public:
 	AMeat();
+
+protected:
+	virtual void InitComponents() override;
 };
