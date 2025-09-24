@@ -14,16 +14,17 @@ class VRGAMEPORTFOLIO_API AKnife : public AActor
 public:	
 	AKnife();
 
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<UStaticMeshComponent> KnifeMesh;
-	UPROPERTY(VisibleAnywhere)
-	TObjectPtr<UBoxComponent> SliceCollision;
-
 protected:
 	virtual void BeginPlay() override;
 	virtual void Tick(float DeltaTime) override;
 
-private:	
+private:
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UStaticMeshComponent> KnifeMesh;
+
+	UPROPERTY(VisibleAnywhere)
+	TObjectPtr<UBoxComponent> SliceCollision;
+
 	void InitComponents();
 	void BindCollisionFunction();
 

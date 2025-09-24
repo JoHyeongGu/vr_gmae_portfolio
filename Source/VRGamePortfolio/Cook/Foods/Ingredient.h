@@ -14,28 +14,28 @@ class VRGAMEPORTFOLIO_API AIngredient : public AActor
 	
 public:
 	AIngredient();
-
 	UPROPERTY(VisibleAnywhere)
 	TObjectPtr<UProceduralMeshComponent> ProceMesh;
 
 	UPROPERTY(VisibleAnywhere)
 	UMaterial* SlicedMaterial;
 
+	void SetProceMeshAttr();
 	void Slice(FVector Position, FVector Normal);
-	virtual void InitComponents();
 
 protected:
-	virtual void BeginPlay() override;
-
 	UPROPERTY(VisibleAnywhere)
 	FString MeshPath;
 
 	UPROPERTY(VisibleAnywhere)
 	FString SlicedMaterialPath;
 
-	void CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* ProceduralMesh, UStaticMesh* StaticMesh);
+	virtual void BeginPlay() override;
+	virtual void InitMesh();
 
 private:
 	UPROPERTY(VisibleAnywhere)
 	AGrabSpawner* GrabSpawner;
+
+	void InitComponents();
 };

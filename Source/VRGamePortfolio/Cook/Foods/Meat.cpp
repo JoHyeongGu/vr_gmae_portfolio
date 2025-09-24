@@ -2,12 +2,12 @@
 
 AMeat::AMeat()
 {
-	InitComponents();
+	InitMesh();
 }
 
-void AMeat::InitComponents()
+void AMeat::InitMesh()
 {
 	MeshPath = "/Game/Meshes/Prototype/PSM_Meat.PSM_Meat";
 	SlicedMaterialPath = "/Game/Materials/Prototype/PM_Meat.PM_Meat";
-	Super::InitComponents();
+	Super::InitMesh();
 }

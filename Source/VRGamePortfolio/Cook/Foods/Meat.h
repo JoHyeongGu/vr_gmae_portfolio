@@ -13,5 +13,5 @@ public:
 	AMeat();
 
 protected:
-	virtual void InitComponents() override;
+	virtual void InitMesh() override;
 };

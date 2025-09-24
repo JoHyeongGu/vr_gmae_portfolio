@@ -5,10 +5,14 @@
 #include "ProceduralMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshSourceData.h"
+#include "PhysicsEngine/BodySetup.h"
 
 AIngredient::AIngredient()
 {
 	PrimaryActorTick.bCanEverTick = true;
+	this->Tags.Add("Ingredient");
+
+	InitComponents();
 }
 
 void AIngredient::BeginPlay()
@@ -23,57 +27,33 @@ void AIngredient::BeginPlay()
 void AIngredient::InitComponents()
 {
 	ProceMesh = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("ShapeMesh"));
-	ProceMesh->SetCollisionProfileName("BlockAll");
-	ProceMesh->SetSimulatePhysics(true);
-	ProceMesh->SetNotifyRigidBodyCollision(true);
-	ProceMesh->bUseComplexAsSimpleCollision = false;
+	SetProceMeshAttr();
 	RootComponent = ProceMesh;
+}
 
+void AIngredient::InitMesh()
+{
 	// Static Mesh 기반 Procedural Mesh 모양 생성
 	if (!MeshPath.IsEmpty()) {
 		static ConstructorHelpers::FObjectFinder<UStaticMesh> MeshRef(*MeshPath);
-		CopyProceduralMeshFromStaticMesh(ProceMesh, MeshRef.Object);
+		UStaticMeshComponent* StaticMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("StaticMesh"));
+		StaticMeshComponent->SetStaticMesh(MeshRef.Object);
+		UKismetProceduralMeshLibrary::CopyProceduralMeshFromStaticMeshComponent(StaticMeshComponent, 0, ProceMesh, true);
+		StaticMeshComponent->DestroyComponent();
 	}
 	// Slice 단면 Material 설정
 	if (!SlicedMaterialPath.IsEmpty()) {
 		static ConstructorHelpers::FObjectFinder<UMaterial> MaterialRef(*SlicedMaterialPath);
 		SlicedMaterial = MaterialRef.Object;
 	}
-
 }
 
-void AIngredient::CopyProceduralMeshFromStaticMesh(UProceduralMeshComponent* ProceduralMesh, UStaticMesh* SourceMesh)
+void AIngredient::SetProceMeshAttr()
 {
-    const TArray<FStaticMaterial> MaterialArray = SourceMesh->GetStaticMaterials();
-    const FStaticMeshRenderData* RenderData = SourceMesh->GetRenderData();
-
-	TArray<FVector> CollisionVertices;
-    for (int32 LODIndex = 0; LODIndex < RenderData->LODResources.Num(); LODIndex++)
-    {
-        const FStaticMeshSectionArray Sections = RenderData->LODResources[LODIndex].Sections;
-        for (int32 SectionIndex = 0; SectionIndex < Sections.Num(); SectionIndex++)
-        {
-            // Section 정보 할당
-            TArray<int32> Triangles;
-			TArray<FVector2D> UVs;
-			TArray<FVector> Normals;
-            TArray<FVector> Vertices;
-			TArray<FProcMeshTangent> Tangents;
-            UKismetProceduralMeshLibrary::GetSectionFromStaticMesh(SourceMesh, LODIndex, SectionIndex, Vertices, Triangles, Normals, UVs, Tangents);
-
-            // 새로운 Section 생성
-            ProceduralMesh->CreateMeshSection(SectionIndex, Vertices, Triangles, Normals, UVs, TArray<FColor>(), Tangents, true);
-
-            // Material 복사
-            const FStaticMeshSection& Section = Sections[SectionIndex];
-            ProceduralMesh->SetMaterial(SectionIndex, MaterialArray[Section.MaterialIndex].MaterialInterface);
-
-			CollisionVertices.Append(Vertices);
-        }
-    }
-	// Set Collision
-    ProceduralMesh->ClearCollisionConvexMeshes();
-    ProceduralMesh->AddCollisionConvexMesh(CollisionVertices);
+	ProceMesh->SetCollisionProfileName("BlockAll");
+	ProceMesh->SetSimulatePhysics(true);
+	ProceMesh->SetNotifyRigidBodyCollision(true);
+	ProceMesh->bUseComplexAsSimpleCollision = false;
 }
 
 void AIngredient::Slice(FVector Position, FVector Normal)
@@ -88,6 +68,52 @@ void AIngredient::Slice(FVector Position, FVector Normal)
 		EProcMeshSliceCapOption::CreateNewSectionForCap,
 		SlicedMaterial
 	);
-	SlicedMesh->DestroyComponent();
+
+	// 새 객체 소환
+	AIngredient* SlicedActor = GetWorld()->SpawnActor<AIngredient>(AIngredient::StaticClass(), SlicedMesh->GetComponentTransform(), FActorSpawnParameters());
+	GrabSpawner->AttachGrabComponent(SlicedActor);
+
+	// collision 생성을 위해 정점 수집
+	TArray<FVector> TotalVertices;
+	for (int SectionIndex = 0; SectionIndex < SlicedMesh->GetNumSections(); SectionIndex++) {
+		TArray<FVector2D> UV0s;
+		TArray<int32> Triangles;
+		TArray<FVector> Normals;
+		TArray<FVector> Vertices;
+		TArray<FProcMeshTangent> Tangents;
+		// ProceduralMesh 데이터 수집
+		UKismetProceduralMeshLibrary::GetSectionFromProceduralMesh(
+			SlicedMesh,
+			SectionIndex,
+			Vertices,
+			Triangles,
+			Normals,
+			UV0s,
+			Tangents
+		);
+		// 새 Actor Mesh section 생성
+		SlicedActor->ProceMesh->CreateMeshSection(
+			SectionIndex, 
+			Vertices, 
+			Triangles, 
+			Normals, 
+			UV0s,
+			TArray<FColor>(),
+			Tangents,
+			true
+		);
+		TotalVertices.Append(Vertices); // 정점 수집
+		// Material 복사
+		SlicedActor->ProceMesh->SetMaterial(SectionIndex, SlicedMesh->GetMaterial(SectionIndex)); 
+	}
+	// 정점 개수 0개 초과면 Collision 복사
+	if (TotalVertices.Num() > 0)
+	{
+		SlicedActor->ProceMesh->ClearCollisionConvexMeshes();
+		SlicedActor->ProceMesh->AddCollisionConvexMesh(TotalVertices);
+	}
+	// Component로 등록
+	SlicedActor->ProceMesh->RegisterComponent();
+	SlicedActor->ProceMesh->MarkRenderStateDirty(); // 렌더링 상태 갱신
 }
 
